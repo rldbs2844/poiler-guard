@@ -2,9 +2,9 @@ import type { GeminiDecision } from "@/lib/spoilerEngine";
 
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 const CANDIDATE_MODELS = [
-  "gemini-3.8-flash",
   "gemini-3.5-flash-lite",
-  "gemini-2.5-flash-lite",
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
 ] as const;
 
 export interface GeminiAnalysisOutcome {
@@ -22,7 +22,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
-async function fetchThumbnailBase64(
+export async function fetchThumbnailBase64(
   videoId: string,
   thumbnailUrl: string
 ): Promise<{ mimeType: string; data: string } | null> {
@@ -37,7 +37,7 @@ async function fetchThumbnailBase64(
 
   for (const url of candidateUrls) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 1600);
+    const timer = setTimeout(() => controller.abort(), 1300);
     try {
       const res = await fetch(url, { signal: controller.signal });
       if (!res.ok) continue;
@@ -65,6 +65,7 @@ export async function analyzeWithGeminiMultimodal(params: {
   ocrText: string;
   sttText: string;
   protectedKeywords: string[];
+  preFetchedImage?: { mimeType: string; data: string } | null;
 }): Promise<GeminiAnalysisOutcome> {
   const apiKey = (process.env.GEMINI_API_KEY ?? "").trim();
   if (!apiKey) {
@@ -77,11 +78,11 @@ export async function analyzeWithGeminiMultimodal(params: {
     return { decision: null, errorReason: null };
   }
 
-  const deadlineAt = Date.now() + 8800;
-  const imagePart = await fetchThumbnailBase64(
-    params.videoId,
-    params.thumbnailUrl
-  );
+  const deadlineAt = Date.now() + 7200;
+  const imagePart =
+    params.preFetchedImage !== undefined
+      ? params.preFetchedImage
+      : await fetchThumbnailBase64(params.videoId, params.thumbnailUrl);
 
   const prompt = `당신은 유튜브 영상 스포일러 실시간 감지기입니다.
 사용자가 차단하길 원하는 작품/인물/대회 키워드 목록: [${params.protectedKeywords.join(", ")}]
@@ -96,7 +97,7 @@ export async function analyzeWithGeminiMultimodal(params: {
 
 판별 규칙:
 1. 썸네일 이미지 안에 적힌 텍스트를 읽어서 "detectedOcrText"에 그대로 추출하세요.
-2. 제목 또는 썸네일·설명에 [스포주의], 스포, 결말, 우승, 사망, 범인, 흑막, 정체, 배신, 반전, 탈락, 역전 등 작품의 핵심 전개·결과 폭로가 포함되면(제목에 작품명을 숨겼더라도) 반드시 isSpoiler=true, confidence=0.85~0.98로 판정하세요.
+2. 제목 또는 썸네일·설명에 [스포주의], 스포, 결말, 우승, 패배, 졌다/졌을까, 사망, 범인, 흑막, 정체, 배신, 반전, 탈락, 역전 등 작품·경기 결과나 핵심 전개 폭로가 포함되면(제목에 작품명을 숨겼더라도) 반드시 isSpoiler=true, confidence=0.85~0.98로 판정하세요.
 3. 단순 작품명·배우 이름만 나오는 공식 티저·예고편·제작발표회·비하인드 영상이라면 isSafeTrailerOrTeaser=true, isSpoiler=false로 판정하세요.
 4. 키워드 목록과 무관한 일상/IT/다른 주제 영상이면 isSpoiler=false, matchedWork=null로 판정하세요.
 
@@ -124,11 +125,11 @@ export async function analyzeWithGeminiMultimodal(params: {
 
   for (const model of CANDIDATE_MODELS) {
     const remainingMs = deadlineAt - Date.now();
-    if (remainingMs < 1200) break;
+    if (remainingMs < 1000) break;
 
     const controller = new AbortController();
     const perModelTimeout = Math.min(
-      model === "gemini-3.8-flash" ? 6000 : 3500,
+      model === "gemini-3.5-flash-lite" ? 4200 : 2800,
       remainingMs
     );
     const timer = setTimeout(() => controller.abort(), perModelTimeout);
@@ -136,6 +137,7 @@ export async function analyzeWithGeminiMultimodal(params: {
     try {
       const generationConfig: Record<string, unknown> = {
         temperature: 0.1,
+        maxOutputTokens: 256,
         responseMimeType: "application/json",
       };
 

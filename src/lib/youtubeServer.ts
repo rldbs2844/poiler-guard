@@ -207,7 +207,10 @@ function mapYtVideoItems(
     .filter((v): v is YouTubeVideoItem => v !== null);
 }
 
-export async function fetchSingleVideoEnrichment(videoId: string): Promise<{
+export async function fetchSingleVideoEnrichment(
+  videoId: string,
+  skipSnippetApi = false
+): Promise<{
   description?: string;
   tags?: string[];
   sttTranscript?: string;
@@ -215,12 +218,12 @@ export async function fetchSingleVideoEnrichment(videoId: string): Promise<{
   const apiKey = (process.env.YOUTUBE_API_KEY ?? "").trim();
   const out: { description?: string; tags?: string[]; sttTranscript?: string } = {};
 
-  if (apiKey) {
+  if (apiKey && !skipSnippetApi) {
     try {
       const url = `${YOUTUBE_API_BASE}/videos?part=snippet&id=${encodeURIComponent(
         videoId
       )}&key=${encodeURIComponent(apiKey)}`;
-      const data = await fetchJsonWithTimeout<YtVideosResponse>(url, 3500);
+      const data = await fetchJsonWithTimeout<YtVideosResponse>(url, 1800);
       const snip = data.items?.[0]?.snippet;
       if (snip) {
         out.description = snip.description ?? "";
@@ -232,7 +235,7 @@ export async function fetchSingleVideoEnrichment(videoId: string): Promise<{
   // Lightweight best-effort public caption track fetch (auto-times out cleanly if unavailable)
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 2500);
+    const timer = setTimeout(() => controller.abort(), 1300);
     const res = await fetch(`https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`, {
       signal: controller.signal,
       headers: { "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8" },
@@ -251,7 +254,7 @@ export async function fetchSingleVideoEnrichment(videoId: string): Promise<{
           tracks.find((t) => t.languageCode?.startsWith("ko")) ?? tracks[0];
         if (koTrack?.baseUrl) {
           const capCtrl = new AbortController();
-          const capTimer = setTimeout(() => capCtrl.abort(), 2000);
+          const capTimer = setTimeout(() => capCtrl.abort(), 1100);
           const capRes = await fetch(koTrack.baseUrl, { signal: capCtrl.signal });
           clearTimeout(capTimer);
           if (capRes.ok) {

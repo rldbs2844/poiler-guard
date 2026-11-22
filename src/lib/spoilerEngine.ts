@@ -111,7 +111,21 @@ export const SPOILER_STATE_WORDS = [
   "새드엔딩",
   "탈락",
   "우승",
+  "우승컵",
   "준우승",
+  "패배",
+  "완패",
+  "졌다",
+  "졌을까",
+  "졌나",
+  "승리",
+  "꺾고",
+  "격파",
+  "제압",
+  "역스윕",
+  "셧아웃",
+  "결승진출",
+  "4강진출",
   "역전",
   "역전승",
   "최후",
@@ -126,6 +140,8 @@ export const SPOILER_STATE_WORDS = [
   "스포",
   "spoiler",
   "ending",
+  "defeated",
+  "eliminated",
 ];
 
 const METADATA_HINT_WORDS = [
@@ -257,7 +273,7 @@ export function evaluateFourStageSpoiler(
   elapsedMs: number,
   geminiError?: string | null
 ): AnalyzeResult {
-  const threshold = clamp(Math.round(input.threshold || 70), 40, 95);
+  const threshold = clamp(Math.round(input.threshold || 70), 40, 100);
   const keywords = input.protectedKeywords
     .map((k) => k.trim())
     .filter(Boolean);

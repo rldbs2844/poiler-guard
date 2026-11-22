@@ -61,6 +61,8 @@ export default function HomePage() {
     watchStackRef.current = watchStack;
   }, [watchStack]);
 
+  const initialUrlHandledRef = useRef<boolean>(false);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (typeof window.history.state?.sgDepth !== "number") {
@@ -215,6 +217,43 @@ export default function HomePage() {
     };
   }, [category, activeQuery, currentFeedKey]);
 
+  useEffect(() => {
+    if (initialUrlHandledRef.current || loadingFeed || typeof window === "undefined") {
+      return;
+    }
+    initialUrlHandledRef.current = true;
+    const vid = new URLSearchParams(window.location.search).get("v")?.trim();
+    if (!vid || watchStackRef.current.length > 0) return;
+
+    const found =
+      videos.find((v) => v.id === vid) ??
+      FALLBACK_VIDEOS.find((v) => v.id === vid);
+
+    const target: YouTubeVideoItem = found ?? {
+      id: vid,
+      title: `YouTube 영상 (${vid})`,
+      channelTitle: "YouTube",
+      channelInitial: "Y",
+      publishedAtLabel: "최근",
+      viewCountLabel: "공유 링크",
+      duration: "00:00",
+      thumbnailUrl: `https://i.ytimg.com/vi/${encodeURIComponent(vid)}/hqdefault.jpg`,
+      category: "drama",
+      description: "",
+      tags: [],
+      source: "youtube-api",
+    };
+
+    const nextStack = [target];
+    historySnapshotsRef.current[1] = nextStack;
+    setWatchStack(nextStack);
+    window.history.replaceState(
+      { sgDepth: 1, videoId: target.id },
+      "",
+      `?v=${encodeURIComponent(target.id)}`
+    );
+  }, [loadingFeed, videos]);
+
   const currentAnalyzeSig = selectedVideo
     ? `${selectedVideo.id}::${threshold}::${activeKeywords.join("|")}`
     : "";
@@ -231,6 +270,8 @@ export default function HomePage() {
     if (!selectedVideo) return;
 
     let cancelled = false;
+    const controller = new AbortController();
+    const abortTimer = window.setTimeout(() => controller.abort(), 7000);
     const targetVideo = selectedVideo;
     const targetSig = currentAnalyzeSig;
     const targetKeywords = [...activeKeywords];
@@ -239,6 +280,7 @@ export default function HomePage() {
     fetch("/api/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
       body: JSON.stringify({
         videoId: targetVideo.id,
         title: targetVideo.title,
@@ -317,10 +359,15 @@ export default function HomePage() {
             )
           );
         }
+      })
+      .finally(() => {
+        window.clearTimeout(abortTimer);
       });
 
     return () => {
       cancelled = true;
+      window.clearTimeout(abortTimer);
+      controller.abort();
     };
   }, [selectedVideo, activeKeywords, threshold, currentAnalyzeSig]);
 

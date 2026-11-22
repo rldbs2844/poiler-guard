@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { FALLBACK_VIDEOS } from "@/lib/fallbackVideos";
 import { evaluateFourStageSpoiler } from "@/lib/spoilerEngine";
 import { fetchSingleVideoEnrichment } from "@/lib/youtubeServer";
-import { analyzeWithGeminiMultimodal } from "@/lib/geminiServer";
+import {
+  analyzeWithGeminiMultimodal,
+  fetchThumbnailBase64,
+} from "@/lib/geminiServer";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 15;
@@ -46,9 +49,25 @@ export async function POST(req: NextRequest) {
       fallbackMatch?.thumbnailUrl ||
       `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 
-    // Enrich metadata/captions if live video lacks full script text
-    if (!sttText || (!description && tags.length === 0)) {
-      const enriched = await fetchSingleVideoEnrichment(videoId);
+    const protectedKeywords = Array.isArray(body.protectedKeywords)
+      ? body.protectedKeywords
+      : [];
+    const threshold =
+      typeof body.threshold === "number" ? body.threshold : 70;
+
+    // Enrich metadata/captions and prefetch thumbnail concurrently for low latency
+    const needsEnrichment = !sttText || (!description && tags.length === 0);
+    const hasSnippetAlready = Boolean(description && tags.length > 0);
+    const [enriched, preFetchedImage] = await Promise.all([
+      needsEnrichment
+        ? fetchSingleVideoEnrichment(videoId, hasSnippetAlready)
+        : Promise.resolve(null),
+      protectedKeywords.length > 0
+        ? fetchThumbnailBase64(videoId, thumbnailUrl)
+        : Promise.resolve(null),
+    ]);
+
+    if (enriched) {
       if (!description && enriched.description) {
         description = enriched.description;
       }
@@ -59,12 +78,6 @@ export async function POST(req: NextRequest) {
         sttText = enriched.sttTranscript;
       }
     }
-
-    const protectedKeywords = Array.isArray(body.protectedKeywords)
-      ? body.protectedKeywords
-      : [];
-    const threshold =
-      typeof body.threshold === "number" ? body.threshold : 70;
 
     // Call Gemini Multimodal when GEMINI_API_KEY is configured on server
     const geminiOutcome = await analyzeWithGeminiMultimodal({
@@ -77,6 +90,7 @@ export async function POST(req: NextRequest) {
       ocrText,
       sttText,
       protectedKeywords,
+      preFetchedImage,
     });
 
     const elapsedMs = Math.max(12, Date.now() - startedAt);

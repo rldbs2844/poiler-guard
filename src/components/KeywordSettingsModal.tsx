@@ -80,7 +80,7 @@ export default function KeywordSettingsModal({
             <input
               type="range"
               min={40}
-              max={95}
+              max={100}
               step={5}
               value={threshold}
               onChange={(e) => onChangeThreshold(Number(e.target.value))}
@@ -96,7 +96,7 @@ export default function KeywordSettingsModal({
                 [55, "55%"],
                 [70, "70% (기본)"],
                 [85, "85%"],
-                [95, "95% (여유)"],
+                [100, "100% (여유)"],
               ].map(([val, label]) => (
                 <button
                   key={val}

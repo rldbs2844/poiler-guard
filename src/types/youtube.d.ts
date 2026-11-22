@@ -36,6 +36,7 @@ export interface YTPlayerInstance {
   pauseVideo: () => void;
   mute: () => void;
   unMute: () => void;
+  cueVideoById: (videoId: string) => void;
   loadVideoById: (videoId: string) => void;
   destroy: () => void;
 }

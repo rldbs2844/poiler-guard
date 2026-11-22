@@ -60,10 +60,11 @@ export default function YouTubeGuardPlayer({
   const [usePlainIframe, setUsePlainIframe] = useState<boolean>(false);
 
   const isBlocked = Boolean(analysis?.isSpoiler && !overridden);
-  const isBlockedRef = useRef<boolean>(isBlocked);
+  const mustHoldPlayback = analyzing || !analysis || isBlocked;
+  const mustHoldPlaybackRef = useRef<boolean>(mustHoldPlayback);
   useEffect(() => {
-    isBlockedRef.current = isBlocked;
-  }, [isBlocked]);
+    mustHoldPlaybackRef.current = mustHoldPlayback;
+  }, [mustHoldPlayback]);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,7 +83,12 @@ export default function YouTubeGuardPlayer({
         if (loadedVideoRef.current !== videoId) {
           loadedVideoRef.current = videoId;
           try {
-            playerRef.current.loadVideoById(videoId);
+            if (mustHoldPlaybackRef.current) {
+              playerRef.current.cueVideoById(videoId);
+              playerRef.current.mute();
+            } else {
+              playerRef.current.loadVideoById(videoId);
+            }
           } catch {}
         }
         return;
@@ -99,23 +105,28 @@ export default function YouTubeGuardPlayer({
         width: "100%",
         height: "100%",
         playerVars: {
-          autoplay: isBlockedRef.current ? 0 : 1,
+          autoplay: mustHoldPlaybackRef.current ? 0 : 1,
           rel: 0,
           modestbranding: 1,
           playsinline: 1,
         },
         events: {
           onReady: (ev) => {
-            if (isBlockedRef.current) {
+            if (mustHoldPlaybackRef.current) {
               try {
                 ev.target.pauseVideo();
                 ev.target.mute();
+              } catch {}
+            } else {
+              try {
+                ev.target.unMute();
+                ev.target.playVideo();
               } catch {}
             }
           },
           onStateChange: (ev) => {
             // 1 = PLAYING
-            if (ev.data === 1 && isBlockedRef.current) {
+            if (ev.data === 1 && mustHoldPlaybackRef.current) {
               try {
                 ev.target.pauseVideo();
                 ev.target.mute();
@@ -141,17 +152,15 @@ export default function YouTubeGuardPlayer({
     const p = playerRef.current;
     if (!p) return;
     try {
-      if (isBlocked) {
+      if (mustHoldPlayback) {
         p.pauseVideo();
         p.mute();
       } else {
         p.unMute();
-        if (overridden) {
-          p.playVideo();
-        }
+        p.playVideo();
       }
     } catch {}
-  }, [isBlocked, overridden]);
+  }, [mustHoldPlayback, overridden, videoId]);
 
   useEffect(() => {
     return () => {
@@ -168,11 +177,13 @@ export default function YouTubeGuardPlayer({
     <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-[#0f172a] border border-[#e2e8f0]">
       {usePlainIframe ? (
         <iframe
-          key={`${videoId}-${isBlocked ? "blocked" : "play"}`}
+          key={`${videoId}-${mustHoldPlayback ? "hold" : "play"}`}
           className="w-full h-full"
           src={`https://www.youtube.com/embed/${encodeURIComponent(
             videoId
-          )}?autoplay=${isBlocked ? 0 : 1}&mute=${isBlocked ? 1 : 0}&rel=0&playsinline=1`}
+          )}?autoplay=${mustHoldPlayback ? 0 : 1}&mute=${
+            mustHoldPlayback ? 1 : 0
+          }&rel=0&playsinline=1`}
           title="YouTube video player"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowFullScreen
@@ -181,11 +192,19 @@ export default function YouTubeGuardPlayer({
         <div ref={hostRef} className="w-full h-full" />
       )}
 
-      {/* Subtle top-right live scanning indicator while /api/analyze runs */}
-      {analyzing && !isBlocked && (
-        <div className="pointer-events-none absolute top-3 right-3 z-20 inline-flex items-center gap-1.5 rounded-md bg-[#0f172a]/85 border border-[#334155] px-2.5 py-1 text-[11px] font-medium text-[#ffffff] backdrop-blur-xs">
-          <Loader2 className="w-3 h-3 animate-spin" />
-          4단계 스포일러 검사 중
+      {/* Protective pre-screen overlay while scanning so zero spoiler frames/audio leak before verdict */}
+      {(analyzing || !analysis) && !overridden && (
+        <div
+          aria-live="polite"
+          className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2.5 bg-[#0f172a]/92 backdrop-blur-md text-[#ffffff] p-4 text-center"
+        >
+          <Loader2 className="w-6 h-6 animate-spin text-[#e2e8f0]" />
+          <div className="text-xs sm:text-sm font-semibold tracking-tight">
+            4단계 AI 스포일러 사전 검사 중...
+          </div>
+          <div className="text-[11px] text-[#94a3b8]">
+            유출 방지를 위해 안전 판정이 확인된 후 자동 재생됩니다
+          </div>
         </div>
       )}
 
