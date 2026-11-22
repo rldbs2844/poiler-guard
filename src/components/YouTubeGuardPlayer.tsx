@@ -144,9 +144,11 @@ export default function YouTubeGuardPlayer({
       if (isBlocked) {
         p.pauseVideo();
         p.mute();
-      } else if (overridden) {
+      } else {
         p.unMute();
-        p.playVideo();
+        if (overridden) {
+          p.playVideo();
+        }
       }
     } catch {}
   }, [isBlocked, overridden]);

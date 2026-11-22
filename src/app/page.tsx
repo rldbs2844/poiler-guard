@@ -46,9 +46,94 @@ export default function HomePage() {
     note: null,
   });
 
-  const [selectedVideo, setSelectedVideo] = useState<YouTubeVideoItem | null>(
-    null
-  );
+  const [watchStack, setWatchStack] = useState<YouTubeVideoItem[]>([]);
+  const selectedVideo =
+    watchStack.length > 0 ? watchStack[watchStack.length - 1] : null;
+  const previousVideo =
+    watchStack.length > 1 ? watchStack[watchStack.length - 2] : null;
+
+  const watchStackRef = useRef<YouTubeVideoItem[]>([]);
+  const historySnapshotsRef = useRef<Record<number, YouTubeVideoItem[]>>({
+    0: [],
+  });
+
+  useEffect(() => {
+    watchStackRef.current = watchStack;
+  }, [watchStack]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (typeof window.history.state?.sgDepth !== "number") {
+      window.history.replaceState(
+        { sgDepth: 0 },
+        "",
+        window.location.pathname + window.location.search
+      );
+    }
+
+    const onPopState = (ev: PopStateEvent) => {
+      const depth =
+        typeof ev.state?.sgDepth === "number" ? ev.state.sgDepth : 0;
+      if (depth <= 0) {
+        setWatchStack([]);
+        return;
+      }
+      const snapshot = historySnapshotsRef.current[depth];
+      if (snapshot && snapshot.length > 0) {
+        setWatchStack(snapshot);
+      } else {
+        setWatchStack((prev) => prev.slice(0, depth));
+      }
+    };
+
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  const openVideo = useCallback((video: YouTubeVideoItem) => {
+    const current = watchStackRef.current;
+    const last = current[current.length - 1];
+    if (last && last.id === video.id) return;
+
+    const nextStack = [...current, video];
+    const nextDepth = nextStack.length;
+    historySnapshotsRef.current[nextDepth] = nextStack;
+    setWatchStack(nextStack);
+
+    if (typeof window !== "undefined") {
+      window.history.pushState(
+        { sgDepth: nextDepth, videoId: video.id },
+        "",
+        `?v=${encodeURIComponent(video.id)}`
+      );
+    }
+  }, []);
+
+  const goBackOneVideo = useCallback(() => {
+    const current = watchStackRef.current;
+    if (current.length === 0) return;
+
+    if (
+      typeof window !== "undefined" &&
+      window.history.state?.sgDepth === current.length &&
+      current.length > 0
+    ) {
+      window.history.back();
+      return;
+    }
+
+    const nextStack = current.slice(0, -1);
+    setWatchStack(nextStack);
+  }, []);
+
+  const goToFeed = useCallback(() => {
+    if (watchStackRef.current.length === 0) return;
+    setWatchStack([]);
+    if (typeof window !== "undefined") {
+      window.history.pushState({ sgDepth: 0 }, "", window.location.pathname);
+    }
+  }, []);
+
   const [keywords, setKeywords] = useState<KeywordRule[]>(DEFAULT_KEYWORD_RULES);
   const [threshold, setThreshold] = useState<number>(70);
 
@@ -226,14 +311,14 @@ export default function HomePage() {
 
   const handleSearchSubmit = (e: FormEvent) => {
     e.preventDefault();
-    setSelectedVideo(null);
+    goToFeed();
     setActiveQuery(searchInput.trim());
   };
 
   const handleClearSearch = () => {
     setSearchInput("");
     setActiveQuery("");
-    setSelectedVideo(null);
+    goToFeed();
   };
 
   const handleToggleKeyword = (id: string) => {
@@ -324,9 +409,9 @@ export default function HomePage() {
 
   const handleNextSafeVideo = useCallback(() => {
     if (nextSafeCandidate) {
-      setSelectedVideo(nextSafeCandidate);
+      openVideo(nextSafeCandidate);
     }
-  }, [nextSafeCandidate]);
+  }, [nextSafeCandidate, openVideo]);
 
   const handleSelectVideoById = useCallback(
     (videoId: string) => {
@@ -334,10 +419,10 @@ export default function HomePage() {
         videos.find((v) => v.id === videoId) ??
         FALLBACK_VIDEOS.find((v) => v.id === videoId);
       if (found) {
-        setSelectedVideo(found);
+        openVideo(found);
       }
     },
-    [videos]
+    [videos, openVideo]
   );
 
   const blockedCount = useMemo(
@@ -354,7 +439,7 @@ export default function HomePage() {
           <button
             type="button"
             onClick={() => {
-              setSelectedVideo(null);
+              goToFeed();
               setCategory("all");
               setSearchInput("");
               setActiveQuery("");
@@ -513,20 +598,22 @@ export default function HomePage() {
               videos={videos}
               loading={loadingFeed}
               inspectedMap={inspectedMap}
-              onSelectVideo={(video) => setSelectedVideo(video)}
+              onSelectVideo={openVideo}
             />
           </>
         ) : (
           <WatchWorkspace
             video={selectedVideo}
+            previousVideo={previousVideo}
             relatedVideos={relatedVideos}
             analysis={analysis}
             analyzing={analyzing}
             overridden={Boolean(overriddenIds[selectedVideo.id])}
             inspectedMap={inspectedMap}
             hasNextSafeVideo={Boolean(nextSafeCandidate)}
-            onBackToFeed={() => setSelectedVideo(null)}
-            onSelectVideo={(video) => setSelectedVideo(video)}
+            onBackToPrevious={goBackOneVideo}
+            onBackToFeed={goToFeed}
+            onSelectVideo={openVideo}
             onOverride={handleOverride}
             onNextSafeVideo={handleNextSafeVideo}
           />

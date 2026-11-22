@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import {
   ArrowLeft,
+  Home,
   ShieldCheck,
   ShieldAlert,
   ChevronDown,
@@ -14,12 +15,14 @@ import type { AnalyzeResult, YouTubeVideoItem } from "@/types/video";
 
 interface WatchWorkspaceProps {
   video: YouTubeVideoItem;
+  previousVideo: YouTubeVideoItem | null;
   relatedVideos: YouTubeVideoItem[];
   analysis: AnalyzeResult | null;
   analyzing: boolean;
   overridden: boolean;
   inspectedMap: Record<string, AnalyzeResult>;
   hasNextSafeVideo: boolean;
+  onBackToPrevious: () => void;
   onBackToFeed: () => void;
   onSelectVideo: (video: YouTubeVideoItem) => void;
   onOverride: () => void;
@@ -28,12 +31,14 @@ interface WatchWorkspaceProps {
 
 export default function WatchWorkspace({
   video,
+  previousVideo,
   relatedVideos,
   analysis,
   analyzing,
   overridden,
   inspectedMap,
   hasNextSafeVideo,
+  onBackToPrevious,
   onBackToFeed,
   onSelectVideo,
   onOverride,
@@ -44,14 +49,29 @@ export default function WatchWorkspace({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <button
-          type="button"
-          onClick={onBackToFeed}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-[#e2e8f0] bg-[#ffffff] hover:bg-[#f8fafc] px-3 py-1.5 text-xs font-semibold text-[#0f172a] transition cursor-pointer"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          홈 피드로 돌아가기
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {previousVideo && (
+            <button
+              type="button"
+              onClick={onBackToPrevious}
+              title={`이전 영상: ${previousVideo.title}`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#0f172a] bg-[#0f172a] hover:bg-[#1e293b] px-3 py-1.5 text-xs font-semibold text-[#ffffff] transition cursor-pointer max-w-[260px] sm:max-w-xs"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">
+                이전 영상 ({previousVideo.title})
+              </span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onBackToFeed}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[#e2e8f0] bg-[#ffffff] hover:bg-[#f8fafc] px-3 py-1.5 text-xs font-semibold text-[#0f172a] transition cursor-pointer"
+          >
+            <Home className="w-3.5 h-3.5" />
+            홈 피드
+          </button>
+        </div>
 
         {analysis && (
           <div className="inline-flex items-center gap-2 text-xs text-[#64748b] tabular-nums">
