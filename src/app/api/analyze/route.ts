@@ -66,7 +66,8 @@ export async function POST(req: NextRequest) {
       typeof body.threshold === "number" ? body.threshold : 70;
 
     // Call Gemini Multimodal when GEMINI_API_KEY is configured on server
-    const geminiDecision = await analyzeWithGeminiMultimodal({
+    const geminiOutcome = await analyzeWithGeminiMultimodal({
+      videoId,
       title,
       channelTitle,
       description,
@@ -91,8 +92,9 @@ export async function POST(req: NextRequest) {
         protectedKeywords,
         threshold,
       },
-      geminiDecision,
-      elapsedMs
+      geminiOutcome.decision,
+      elapsedMs,
+      geminiOutcome.errorReason
     );
 
     return NextResponse.json(analysis);

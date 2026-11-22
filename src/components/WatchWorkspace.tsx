@@ -5,6 +5,7 @@ import Image from "next/image";
 import {
   ArrowLeft,
   Home,
+  Shield,
   ShieldCheck,
   ShieldAlert,
   ChevronDown,
@@ -26,6 +27,7 @@ interface WatchWorkspaceProps {
   onBackToFeed: () => void;
   onSelectVideo: (video: YouTubeVideoItem) => void;
   onOverride: () => void;
+  onRestoreShield: () => void;
   onNextSafeVideo: () => void;
 }
 
@@ -42,6 +44,7 @@ export default function WatchWorkspace({
   onBackToFeed,
   onSelectVideo,
   onOverride,
+  onRestoreShield,
   onNextSafeVideo,
 }: WatchWorkspaceProps) {
   const [showDetails, setShowDetails] = useState(false);
@@ -78,7 +81,7 @@ export default function WatchWorkspace({
             <span className="px-2 py-0.5 rounded bg-[#f8fafc] border border-[#e2e8f0] font-medium text-[#334155]">
               {analysis.engineMode === "gemini-multimodal"
                 ? `Gemini 멀티모달 (${analysis.modelUsed})`
-                : "로컬 4단계 정밀 엔진"}
+                : "로컬 정밀 엔진"}
             </span>
             <span>판정 {analysis.durationMs}ms</span>
           </div>
@@ -119,21 +122,39 @@ export default function WatchWorkspace({
               </div>
 
               {analysis && (
-                <div
-                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold border ${
-                    analysis.isSpoiler
-                      ? "bg-[#fef2f2] text-[#b91c1c] border-[#fecaca]"
-                      : "bg-[#f0fdf4] text-[#15803d] border-[#bbf7d0]"
-                  }`}
-                >
-                  {analysis.isSpoiler ? (
-                    <ShieldAlert className="w-3.5 h-3.5" />
+                <div className="flex flex-wrap items-center gap-2">
+                  {analysis.isSpoiler && overridden ? (
+                    <>
+                      <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold border bg-[#fffbeb] text-[#b45309] border-[#fde68a]">
+                        <Shield className="w-3.5 h-3.5" />
+                        가림막 해제됨 (사용자 허용 · {analysis.riskScore}%)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={onRestoreShield}
+                        className="inline-flex items-center gap-1 rounded-full border border-[#0f172a] bg-[#0f172a] hover:bg-[#1e293b] px-3 py-1 text-xs font-semibold text-[#ffffff] transition cursor-pointer"
+                      >
+                        다시 가림막 씌우기
+                      </button>
+                    </>
                   ) : (
-                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <div
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold border ${
+                        analysis.isSpoiler
+                          ? "bg-[#fef2f2] text-[#b91c1c] border-[#fecaca]"
+                          : "bg-[#f0fdf4] text-[#15803d] border-[#bbf7d0]"
+                      }`}
+                    >
+                      {analysis.isSpoiler ? (
+                        <ShieldAlert className="w-3.5 h-3.5" />
+                      ) : (
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                      )}
+                      {analysis.isSpoiler
+                        ? `차단 기준 초과 (${analysis.riskScore}% / ${analysis.threshold}%)`
+                        : `안전 통과 (${analysis.riskScore}% / ${analysis.threshold}%)`}
+                    </div>
                   )}
-                  {analysis.isSpoiler
-                    ? `차단 기준 초과 (${analysis.riskScore}% / ${analysis.threshold}%)`
-                    : `안전 통과 (${analysis.riskScore}% / ${analysis.threshold}%)`}
                 </div>
               )}
             </div>
@@ -144,6 +165,7 @@ export default function WatchWorkspace({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-xs font-bold text-[#0f172a]">
                 실시간 4단계 스포일러 탐지 분석 결과
+                {analysis ? ` (합산 위험도 ${analysis.riskScore}%)` : ""}
               </span>
               <button
                 type="button"
@@ -242,6 +264,16 @@ export default function WatchWorkspace({
 
                 {showDetails && (
                   <div className="rounded-lg border border-[#e2e8f0] bg-[#ffffff] p-3 text-xs text-[#475569] space-y-2">
+                    <div>
+                      <span className="font-semibold text-[#0f172a]">
+                        엔진 상태:{" "}
+                      </span>
+                      {analysis.stages.stage4Fusion.geminiUsed
+                        ? `Gemini 멀티모달 정상 동작 (${analysis.stages.stage4Fusion.geminiModel})`
+                        : analysis.stages.stage4Fusion.geminiError
+                        ? `로컬 폴백 (${analysis.stages.stage4Fusion.geminiError})`
+                        : "로컬 4단계 정밀 엔진"}
+                    </div>
                     <div>
                       <span className="font-semibold text-[#0f172a]">
                         영상 설명:{" "}

@@ -144,6 +144,14 @@ export default function HomePage() {
   const [overriddenIds, setOverriddenIds] = useState<Record<string, boolean>>(
     {}
   );
+  const overriddenIdsRef = useRef<Record<string, boolean>>({});
+  useEffect(() => {
+    overriddenIdsRef.current = overriddenIds;
+  }, [overriddenIds]);
+
+  const [lastObservedEngine, setLastObservedEngine] = useState<
+    "gemini-multimodal" | "local-fallback" | null
+  >(null);
   const [inspectedMap, setInspectedMap] = useState<
     Record<string, AnalyzeResult>
   >({});
@@ -270,6 +278,7 @@ export default function HomePage() {
       .then((result) => {
         if (cancelled) return;
         setAnalysisState({ sig: targetSig, result });
+        setLastObservedEngine(result.engineMode);
         setInspectedMap((prev) => ({ ...prev, [targetVideo.id]: result }));
 
         const logSig = `${targetVideo.id}:${result.threshold}:${result.riskScore}:${targetKeywords.join(",")}`;
@@ -281,13 +290,13 @@ export default function HomePage() {
             second: "2-digit",
           });
           const entry: DetectionLogEntry = {
-            id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            id: `${targetVideo.id}-${Date.now()}`,
             timestamp: nowStr,
             videoId: targetVideo.id,
             videoTitle: targetVideo.title,
             channelTitle: targetVideo.channelTitle,
             blocked: result.isSpoiler,
-            overriddenByUser: false,
+            overriddenByUser: Boolean(overriddenIdsRef.current[targetVideo.id]),
             riskScore: result.riskScore,
             threshold: result.threshold,
             durationMs: result.durationMs,
@@ -300,7 +309,13 @@ export default function HomePage() {
             engineMode: result.engineMode,
             reason: result.reason,
           };
-          setLogs((prev) => [entry, ...prev].slice(0, 100));
+          // Upsert by videoId so revisiting or slider tuning keeps 1 latest log per video
+          setLogs((prev) =>
+            [entry, ...prev.filter((item) => item.videoId !== targetVideo.id)].slice(
+              0,
+              100
+            )
+          );
         }
       });
 
@@ -312,12 +327,14 @@ export default function HomePage() {
   const handleSearchSubmit = (e: FormEvent) => {
     e.preventDefault();
     goToFeed();
+    setCategory("all");
     setActiveQuery(searchInput.trim());
   };
 
   const handleClearSearch = () => {
     setSearchInput("");
     setActiveQuery("");
+    setCategory("all");
     goToFeed();
   };
 
@@ -398,13 +415,29 @@ export default function HomePage() {
   const handleOverride = useCallback(() => {
     if (!selectedVideo) return;
     setOverriddenIds((prev) => ({ ...prev, [selectedVideo.id]: true }));
-    setLogs((prev) => {
-      const idx = prev.findIndex((l) => l.videoId === selectedVideo.id);
-      if (idx === -1) return prev;
-      const next = [...prev];
-      next[idx] = { ...next[idx], overriddenByUser: true };
+    setLogs((prev) =>
+      prev.map((item) =>
+        item.videoId === selectedVideo.id
+          ? { ...item, overriddenByUser: true }
+          : item
+      )
+    );
+  }, [selectedVideo]);
+
+  const handleRestoreShield = useCallback(() => {
+    if (!selectedVideo) return;
+    setOverriddenIds((prev) => {
+      const next = { ...prev };
+      delete next[selectedVideo.id];
       return next;
     });
+    setLogs((prev) =>
+      prev.map((item) =>
+        item.videoId === selectedVideo.id
+          ? { ...item, overriddenByUser: false }
+          : item
+      )
+    );
   }, [selectedVideo]);
 
   const handleNextSafeVideo = useCallback(() => {
@@ -586,7 +619,15 @@ export default function HomePage() {
                 <span>·</span>
                 <span>
                   판정:{" "}
-                  {apiStatus.hasGeminiKey ? "Gemini 멀티모달" : "로컬 4단계 엔진"}
+                  {lastObservedEngine === "gemini-multimodal"
+                    ? "Gemini 멀티모달"
+                    : lastObservedEngine === "local-fallback"
+                    ? apiStatus.hasGeminiKey
+                      ? "로컬 정밀 엔진 (Gemini 폴백)"
+                      : "로컬 정밀 엔진"
+                    : apiStatus.hasGeminiKey
+                    ? "Gemini 멀티모달"
+                    : "로컬 정밀 엔진"}
                 </span>
                 <span>·</span>
                 <span>민감도 {threshold}%</span>
@@ -615,6 +656,7 @@ export default function HomePage() {
             onBackToFeed={goToFeed}
             onSelectVideo={openVideo}
             onOverride={handleOverride}
+            onRestoreShield={handleRestoreShield}
             onNextSafeVideo={handleNextSafeVideo}
           />
         )}

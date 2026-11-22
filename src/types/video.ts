@@ -73,6 +73,7 @@ export interface StageBreakdown {
     geminiUsed: boolean;
     geminiModel: string | null;
     geminiVerdict: boolean | null;
+    geminiError?: string | null;
     summary: string;
   };
 }

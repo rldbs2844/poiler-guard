@@ -68,7 +68,7 @@ export default function KeywordSettingsModal({
 
         <div className="p-5 space-y-5">
           {/* Sensitivity Slider */}
-          <div className="rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-3.5 space-y-2.5">
+          <div className="rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-3.5 space-y-2">
             <div className="flex items-center justify-between text-xs">
               <span className="font-semibold text-[#0f172a]">
                 차단 임계치 (민감도)
@@ -84,13 +84,33 @@ export default function KeywordSettingsModal({
               step={5}
               value={threshold}
               onChange={(e) => onChangeThreshold(Number(e.target.value))}
+              onInput={(e) =>
+                onChangeThreshold(Number((e.target as HTMLInputElement).value))
+              }
               className="w-full cursor-pointer"
               aria-label="스포일러 차단 임계치 조절"
             />
-            <div className="flex items-center justify-between text-[11px] text-[#64748b]">
-              <span>40% (엄격 차단)</span>
-              <span>70% (기본 권장)</span>
-              <span>95% (확실한 결말만)</span>
+            <div className="flex items-center justify-between gap-1 text-[11px] tabular-nums">
+              {[
+                [40, "40% (엄격)"],
+                [55, "55%"],
+                [70, "70% (기본)"],
+                [85, "85%"],
+                [95, "95% (여유)"],
+              ].map(([val, label]) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => onChangeThreshold(Number(val))}
+                  className={`px-1.5 py-0.5 rounded transition cursor-pointer ${
+                    threshold === Number(val)
+                      ? "bg-[#0f172a] text-[#ffffff] font-semibold"
+                      : "text-[#64748b] hover:text-[#0f172a] hover:bg-[#e2e8f0]/60"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
 

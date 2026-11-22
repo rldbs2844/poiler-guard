@@ -207,6 +207,160 @@ export default function DetectionLogModal({
           </div>
         </div>
 
+        {/* Clean Stage Average & Block Summary Chart */}
+        {(() => {
+          const safeCount = Math.max(0, totalCount - blockedCount);
+          const blockedPct =
+            totalCount > 0 ? Math.round((blockedCount / totalCount) * 100) : 0;
+          const safePct = totalCount > 0 ? 100 - blockedPct : 0;
+          const avgS1 =
+            totalCount > 0
+              ? Number(
+                  (
+                    logs.reduce((acc, r) => acc + r.stage1Score, 0) / totalCount
+                  ).toFixed(1)
+                )
+              : 0;
+          const avgS2 =
+            totalCount > 0
+              ? Number(
+                  (
+                    logs.reduce((acc, r) => acc + r.stage2Score, 0) / totalCount
+                  ).toFixed(1)
+                )
+              : 0;
+          const avgS3 =
+            totalCount > 0
+              ? Number(
+                  (
+                    logs.reduce((acc, r) => acc + r.stage3Score, 0) / totalCount
+                  ).toFixed(1)
+                )
+              : 0;
+          const avgS4 =
+            totalCount > 0
+              ? Number(
+                  (
+                    logs.reduce((acc, r) => acc + r.stage4Bonus, 0) / totalCount
+                  ).toFixed(1)
+                )
+              : 0;
+
+          const stageBars = [
+            {
+              label: "S1 메타 (최대 28%)",
+              avg: avgS1,
+              max: 28,
+              color: "#334155",
+            },
+            {
+              label: "S2 OCR (최대 32%)",
+              avg: avgS2,
+              max: 32,
+              color: "#475569",
+            },
+            {
+              label: "S3 STT (최대 28%)",
+              avg: avgS3,
+              max: 28,
+              color: "#64748b",
+            },
+            {
+              label: "S4 문맥·AI (보너스)",
+              avg: avgS4,
+              max: 44,
+              color: "#dc2626",
+            },
+          ];
+
+          return (
+            <div className="px-5 pb-4 grid grid-cols-1 md:grid-cols-12 gap-3">
+              {/* Left: Block Ratio Bar */}
+              <div className="md:col-span-5 rounded-lg border border-[#e2e8f0] bg-[#ffffff] p-3.5 flex flex-col justify-between space-y-2.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-[#0f172a]">
+                    차단 vs 안전 판정 비율
+                  </span>
+                  <span className="text-[11px] text-[#64748b] tabular-nums">
+                    총 {totalCount}건
+                  </span>
+                </div>
+
+                <div className="w-full h-4 rounded-md bg-[#f1f5f9] overflow-hidden flex border border-[#e2e8f0]">
+                  {totalCount > 0 && (
+                    <>
+                      <div
+                        style={{ width: `${blockedPct}%` }}
+                        className="h-full bg-[#dc2626] transition-all"
+                        title={`차단됨 ${blockedCount}건`}
+                      />
+                      <div
+                        style={{ width: `${safePct}%` }}
+                        className="h-full bg-[#16a34a] transition-all"
+                        title={`안전 통과 ${safeCount}건`}
+                      />
+                    </>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] tabular-nums">
+                  <span className="inline-flex items-center gap-1.5 text-[#334155]">
+                    <span className="w-2.5 h-2.5 rounded-xs bg-[#dc2626]" />
+                    차단됨 <strong className="text-[#0f172a]">{blockedCount}건</strong> ({blockedPct}%)
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 text-[#334155]">
+                    <span className="w-2.5 h-2.5 rounded-xs bg-[#16a34a]" />
+                    안전 통과 <strong className="text-[#0f172a]">{safeCount}건</strong> ({safePct}%)
+                  </span>
+                </div>
+              </div>
+
+              {/* Right: Stage Average Contribution Horizontal Bar Chart */}
+              <div className="md:col-span-7 rounded-lg border border-[#e2e8f0] bg-[#ffffff] p-3.5 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-[#0f172a]">
+                    단계별 평균 위험도 기여 점수
+                  </span>
+                  <span className="text-[11px] text-[#64748b]">
+                    검사 영상 전체 평균 (%p)
+                  </span>
+                </div>
+
+                <div className="space-y-1.5">
+                  {stageBars.map((bar) => {
+                    const widthPct = Math.min(
+                      100,
+                      Math.round((bar.avg / bar.max) * 100)
+                    );
+                    return (
+                      <div
+                        key={bar.label}
+                        className="grid grid-cols-12 items-center gap-2 text-[11px]"
+                      >
+                        <span className="col-span-5 sm:col-span-4 text-[#475569] truncate">
+                          {bar.label}
+                        </span>
+                        <div className="col-span-5 sm:col-span-6 h-2.5 rounded-full bg-[#f1f5f9] overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{
+                              width: `${widthPct}%`,
+                              backgroundColor: bar.color,
+                            }}
+                          />
+                        </div>
+                        <span className="col-span-2 text-right font-mono font-semibold text-[#0f172a] tabular-nums">
+                          +{bar.avg}%
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Log Table */}
         <div className="px-5 pb-5 flex-1 overflow-auto">
           <div className="border border-[#e2e8f0] rounded-lg overflow-hidden">
