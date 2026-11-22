@@ -1,12 +1,10 @@
 import type { GeminiDecision } from "@/lib/spoilerEngine";
 
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
-// Active free-tier multimodal models first, legacy 2.5-flash last
 const CANDIDATE_MODELS = [
-  "gemini-2.5-flash-lite",
+  "gemini-3.8-flash",
   "gemini-3.5-flash-lite",
-  "gemini-flash-latest",
-  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
 ] as const;
 
 export interface GeminiAnalysisOutcome {
@@ -39,7 +37,7 @@ async function fetchThumbnailBase64(
 
   for (const url of candidateUrls) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 1800);
+    const timer = setTimeout(() => controller.abort(), 1600);
     try {
       const res = await fetch(url, { signal: controller.signal });
       if (!res.ok) continue;
@@ -79,7 +77,7 @@ export async function analyzeWithGeminiMultimodal(params: {
     return { decision: null, errorReason: null };
   }
 
-  const deadlineAt = Date.now() + 8200;
+  const deadlineAt = Date.now() + 8800;
   const imagePart = await fetchThumbnailBase64(
     params.videoId,
     params.thumbnailUrl
@@ -129,7 +127,10 @@ export async function analyzeWithGeminiMultimodal(params: {
     if (remainingMs < 1200) break;
 
     const controller = new AbortController();
-    const perModelTimeout = Math.min(4500, remainingMs);
+    const perModelTimeout = Math.min(
+      model === "gemini-3.8-flash" ? 6000 : 3500,
+      remainingMs
+    );
     const timer = setTimeout(() => controller.abort(), perModelTimeout);
 
     try {
@@ -137,9 +138,6 @@ export async function analyzeWithGeminiMultimodal(params: {
         temperature: 0.1,
         responseMimeType: "application/json",
       };
-      if (model === "gemini-2.5-flash") {
-        generationConfig.thinkingConfig = { thinkingBudget: 0 };
-      }
 
       const res = await fetch(
         `${GEMINI_API_BASE}/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
