@@ -1,9 +1,20 @@
-export type VideoCategory = "all" | "drama" | "gaming" | "vlog" | "tech";
+export type VideoCategory =
+  | "all"
+  | "drama"
+  | "variety"
+  | "gaming"
+  | "sports"
+  | "music"
+  | "vlog"
+  | "tech";
 
 export const CATEGORY_LABELS: Record<VideoCategory, string> = {
   all: "전체",
   drama: "드라마·영화",
+  variety: "예능·먹방",
   gaming: "게임·e스포츠",
+  sports: "스포츠",
+  music: "음악·K-POP",
   vlog: "일상·브이로그",
   tech: "IT·테크",
 };

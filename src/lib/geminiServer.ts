@@ -4,7 +4,6 @@ const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models
 const CANDIDATE_MODELS = [
   "gemini-3.5-flash-lite",
   "gemini-2.5-flash",
-  "gemini-2.0-flash",
 ] as const;
 
 export interface GeminiAnalysisOutcome {
@@ -129,7 +128,7 @@ export async function analyzeWithGeminiMultimodal(params: {
 
     const controller = new AbortController();
     const perModelTimeout = Math.min(
-      model === "gemini-3.5-flash-lite" ? 4200 : 2800,
+      model === "gemini-3.5-flash-lite" ? 4500 : 3200,
       remainingMs
     );
     const timer = setTimeout(() => controller.abort(), perModelTimeout);

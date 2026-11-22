@@ -3,12 +3,66 @@ import { FALLBACK_VIDEOS } from "@/lib/fallbackVideos";
 
 const YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3";
 
-const CATEGORY_QUERY_MAP: Record<Exclude<VideoCategory, "all">, string> = {
-  drama: "한국 드라마 영화 리뷰 예고편",
-  gaming: "롤드컵 LCK 하이라이트 게임",
-  vlog: "서울 일상 브이로그 카페",
-  tech: "IT 테크 리뷰 Next.js 코딩",
+const CATEGORY_QUERIES: Record<Exclude<VideoCategory, "all">, string[]> = {
+  drama: [
+    "한국 드라마 영화 리뷰 예고편",
+    "넷플릭스 신작 드라마 결말 해석",
+    "최신 개봉 영화 추천 리뷰",
+  ],
+  variety: [
+    "한국 인기 예능 하이라이트 레전드",
+    "흑백요리사 솔로지옥 예능 리뷰",
+    "인기 먹방 유튜버 추천 신메뉴",
+  ],
+  gaming: [
+    "롤드컵 LCK 하이라이트 게임",
+    "최신 인기 게임 플레이 리뷰",
+    "발로란트 페이커 e스포츠 명장면",
+  ],
+  sports: [
+    "손흥민 프리미어리그 축구 하이라이트",
+    "해외축구 KBO 야구 명장면",
+    "스포츠 결승전 하이라이트 분석",
+  ],
+  music: [
+    "K-POP 인기 신곡 라이브 무대",
+    "유튜브 인기 뮤직비디오 플레이리스트",
+    "한국 감성 라이브 클립 콘서트",
+  ],
+  vlog: [
+    "서울 일상 브이로그 카페 투어",
+    "일본 유럽 여행 브이로그 추천",
+    "직장인 자취 일상 주말 루틴",
+  ],
+  tech: [
+    "IT 테크 리뷰 Next.js 코딩",
+    "AI 최신 툴 개발자 실전 리뷰",
+    "아이폰 맥북 가젯 신제품 언박싱",
+  ],
 };
+
+const HOME_DISCOVERY_TOPICS = [
+  "넷플릭스 한국 드라마 신작 예능 하이라이트",
+  "손흥민 해외축구 스포츠 하이라이트 LCK",
+  "K-POP 인기 신곡 라이브 음악 브이로그",
+  "흑백요리사 예능 먹방 여행 브이로그",
+  "IT 테크 AI 신제품 리뷰 인기 게임",
+];
+
+function seededShuffle<T>(items: T[], seed: number): T[] {
+  const arr = [...items];
+  if (arr.length <= 1 || seed <= 0) return arr;
+  let state = (seed ^ 0x9e3779b9) >>> 0;
+  const nextRand = () => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(nextRand() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
 
 function inferCategory(
   title: string,
@@ -21,6 +75,15 @@ function inferCategory(
     /롤드컵|lck|페이커|t1|게임|e스포츠|발로란트|리그 오브 레전드|worlds/.test(hay)
   ) {
     return "gaming";
+  }
+  if (/손흥민|축구|야구|프리미어리그|epl|kbo|nba|ufc|하이라이트|골/.test(hay)) {
+    return "sports";
+  }
+  if (/라이브|신곡|mv|뮤직비디오|플레이리스트|노래|콘서트|k-?pop|밤편지|직캠/.test(hay)) {
+    return "music";
+  }
+  if (/예능|먹방|흑백요리사|솔로지옥|백종원|유재석|런닝맨|나혼산/.test(hay)) {
+    return "variety";
   }
   if (/브이로그|vlog|일상|카페|여행|집밥/.test(hay)) {
     return "vlog";
@@ -112,7 +175,8 @@ interface YtVideosResponse {
 
 export async function fetchYouTubeFeedServer(
   query: string,
-  category: VideoCategory
+  category: VideoCategory,
+  seed = 0
 ): Promise<{ videos: YouTubeVideoItem[]; source: "youtube-api" | "fallback"; note?: string }> {
   const apiKey = (process.env.YOUTUBE_API_KEY ?? "").trim();
 
@@ -125,7 +189,9 @@ export async function fetchYouTubeFeedServer(
       const hay = `${v.title} ${v.channelTitle} ${v.description} ${v.tags.join(" ")}`.toLowerCase();
       return hay.includes(cleanQ);
     });
-    return { videos: list, source: "fallback" as const, note };
+    const finalFallback =
+      !cleanQ && seed > 0 ? seededShuffle(list, seed).slice(0, 12) : list.slice(0, 12);
+    return { videos: finalFallback, source: "fallback" as const, note };
   };
 
   if (!apiKey) {
@@ -136,24 +202,54 @@ export async function fetchYouTubeFeedServer(
     let ids: string[] = [];
     const cleanQuery = query.trim();
 
-    if (cleanQuery || category !== "all") {
-      const searchQ =
-        cleanQuery || CATEGORY_QUERY_MAP[category as Exclude<VideoCategory, "all">];
+    if (cleanQuery) {
       const searchUrl = `${YOUTUBE_API_BASE}/search?part=snippet&type=video&maxResults=12&regionCode=KR&relevanceLanguage=ko&safeSearch=moderate&q=${encodeURIComponent(
-        searchQ
+        cleanQuery
       )}&key=${encodeURIComponent(apiKey)}`;
       const searchData = await fetchJsonWithTimeout<YtSearchResponse>(searchUrl);
       ids = (searchData.items ?? [])
         .map((it) => it.id?.videoId)
         .filter((v): v is string => Boolean(v));
+    } else if (category !== "all") {
+      const queryPool = CATEGORY_QUERIES[category];
+      const chosenQ = queryPool[seed % queryPool.length];
+      const orderPool = ["relevance", "viewCount", "date"] as const;
+      const order = orderPool[(Math.floor(seed / 3)) % orderPool.length];
+      const searchUrl = `${YOUTUBE_API_BASE}/search?part=snippet&type=video&maxResults=24&order=${order}&regionCode=KR&relevanceLanguage=ko&safeSearch=moderate&q=${encodeURIComponent(
+        chosenQ
+      )}&key=${encodeURIComponent(apiKey)}`;
+      const searchData = await fetchJsonWithTimeout<YtSearchResponse>(searchUrl);
+      const rawIds = (searchData.items ?? [])
+        .map((it) => it.id?.videoId)
+        .filter((v): v is string => Boolean(v));
+      ids = seededShuffle(rawIds, seed || 1).slice(0, 12);
     } else {
-      const popUrl = `${YOUTUBE_API_BASE}/videos?part=snippet,contentDetails,statistics&chart=mostPopular&regionCode=KR&maxResults=12&key=${encodeURIComponent(
-        apiKey
-      )}`;
-      const popData = await fetchJsonWithTimeout<YtVideosResponse>(popUrl);
-      const mapped = mapYtVideoItems(popData, category);
-      if (mapped.length > 0) {
-        return { videos: mapped, source: "youtube-api" };
+      // Home "all" feed: rotate algorithm strategy on every refresh seed
+      const mode = seed > 0 ? seed % 3 : 0;
+      if (mode === 1) {
+        const discoveryQ = HOME_DISCOVERY_TOPICS[seed % HOME_DISCOVERY_TOPICS.length];
+        const searchUrl = `${YOUTUBE_API_BASE}/search?part=snippet&type=video&maxResults=24&order=relevance&regionCode=KR&relevanceLanguage=ko&safeSearch=moderate&q=${encodeURIComponent(
+          discoveryQ
+        )}&key=${encodeURIComponent(apiKey)}`;
+        const searchData = await fetchJsonWithTimeout<YtSearchResponse>(searchUrl);
+        const rawIds = (searchData.items ?? [])
+          .map((it) => it.id?.videoId)
+          .filter((v): v is string => Boolean(v));
+        ids = seededShuffle(rawIds, seed).slice(0, 12);
+      } else {
+        // Fetch top 45 KR mostPopular (1 API unit) and slice/shuffle differently by seed
+        const popUrl = `${YOUTUBE_API_BASE}/videos?part=snippet,contentDetails,statistics&chart=mostPopular&regionCode=KR&maxResults=45&key=${encodeURIComponent(
+          apiKey
+        )}`;
+        const popData = await fetchJsonWithTimeout<YtVideosResponse>(popUrl);
+        const mapped = mapYtVideoItems(popData, category);
+        if (mapped.length > 0) {
+          const pool =
+            mode === 2 && mapped.length > 20 ? mapped.slice(12) : mapped;
+          const varied =
+            seed > 0 ? seededShuffle(pool, seed).slice(0, 12) : pool.slice(0, 12);
+          return { videos: varied, source: "youtube-api" };
+        }
       }
     }
 

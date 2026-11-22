@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Search, SlidersHorizontal, ClipboardList, X } from "lucide-react";
+import { Search, SlidersHorizontal, ClipboardList, X, RefreshCw } from "lucide-react";
 import VideoFeedGrid from "@/components/VideoFeedGrid";
 import WatchWorkspace from "@/components/WatchWorkspace";
 import KeywordSettingsModal from "@/components/KeywordSettingsModal";
@@ -30,6 +30,9 @@ export default function HomePage() {
   const [category, setCategory] = useState<VideoCategory>("all");
   const [searchInput, setSearchInput] = useState<string>("");
   const [activeQuery, setActiveQuery] = useState<string>("");
+  const [algoSeed, setAlgoSeed] = useState<number>(
+    () => Math.floor(Math.random() * 1_000_000) + 1
+  );
 
   const [videos, setVideos] = useState<YouTubeVideoItem[]>(FALLBACK_VIDEOS);
   const [loadedFeedKey, setLoadedFeedKey] = useState<string>("");
@@ -167,19 +170,23 @@ export default function HomePage() {
     [keywords]
   );
 
-  const currentFeedKey = `${category}::${activeQuery}`;
+  const currentFeedKey = `${category}::${activeQuery}::${algoSeed}`;
   const loadingFeed = loadedFeedKey !== currentFeedKey;
 
-  // Fetch /api/youtube whenever category or active search query changes
+  const handleRefreshAlgorithm = useCallback(() => {
+    setAlgoSeed((prev) => prev + 1 + Math.floor(Math.random() * 97));
+  }, []);
+
+  // Fetch /api/youtube whenever category, search query, or algorithm seed changes
   useEffect(() => {
     let cancelled = false;
     const reqKey = currentFeedKey;
 
     const url = `/api/youtube?category=${encodeURIComponent(
       category
-    )}&q=${encodeURIComponent(activeQuery)}`;
+    )}&q=${encodeURIComponent(activeQuery)}&seed=${algoSeed}`;
 
-    fetch(url)
+    fetch(url, { cache: "no-store" })
       .then(async (res) => {
         if (!res.ok) throw new Error("YouTube API fetch error");
         return (await res.json()) as YouTubeApiPayload;
@@ -215,7 +222,7 @@ export default function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, [category, activeQuery, currentFeedKey]);
+  }, [category, activeQuery, currentFeedKey, algoSeed]);
 
   useEffect(() => {
     if (initialUrlHandledRef.current || loadingFeed || typeof window === "undefined") {
@@ -523,6 +530,7 @@ export default function HomePage() {
               setCategory("all");
               setSearchInput("");
               setActiveQuery("");
+              handleRefreshAlgorithm();
             }}
             className="flex items-center gap-2.5 shrink-0 cursor-pointer"
           >
@@ -678,6 +686,20 @@ export default function HomePage() {
                 </span>
                 <span>·</span>
                 <span>민감도 {threshold}%</span>
+                <button
+                  type="button"
+                  onClick={handleRefreshAlgorithm}
+                  disabled={loadingFeed}
+                  title="추천 알고리즘 피드 새로고침"
+                  className="ml-1 inline-flex items-center gap-1 rounded-md border border-[#e2e8f0] bg-[#ffffff] hover:bg-[#f8fafc] disabled:opacity-50 px-2 py-1 text-[11px] font-medium text-[#0f172a] transition cursor-pointer"
+                >
+                  <RefreshCw
+                    className={`w-3 h-3 text-[#475569] ${
+                      loadingFeed ? "animate-spin" : ""
+                    }`}
+                  />
+                  새 추천
+                </button>
               </div>
             </div>
 
