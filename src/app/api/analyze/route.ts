@@ -5,6 +5,7 @@ import { fetchSingleVideoEnrichment } from "@/lib/youtubeServer";
 import { analyzeWithGeminiMultimodal } from "@/lib/geminiServer";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 15;
 
 interface AnalyzeRequestBody {
   videoId?: string;

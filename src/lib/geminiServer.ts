@@ -1,7 +1,13 @@
 import type { GeminiDecision } from "@/lib/spoilerEngine";
 
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
-const CANDIDATE_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"] as const;
+// Active free-tier multimodal models first, legacy 2.5-flash last
+const CANDIDATE_MODELS = [
+  "gemini-2.5-flash-lite",
+  "gemini-3.5-flash-lite",
+  "gemini-flash-latest",
+  "gemini-2.5-flash",
+] as const;
 
 export interface GeminiAnalysisOutcome {
   decision: GeminiDecision | null;
@@ -27,14 +33,13 @@ async function fetchThumbnailBase64(
       [
         thumbnailUrl,
         `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`,
-        `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/mqdefault.jpg`,
       ].filter((u) => u && u.startsWith("https://"))
     )
   );
 
   for (const url of candidateUrls) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 3000);
+    const timer = setTimeout(() => controller.abort(), 1800);
     try {
       const res = await fetch(url, { signal: controller.signal });
       if (!res.ok) continue;
@@ -74,6 +79,7 @@ export async function analyzeWithGeminiMultimodal(params: {
     return { decision: null, errorReason: null };
   }
 
+  const deadlineAt = Date.now() + 8200;
   const imagePart = await fetchThumbnailBase64(
     params.videoId,
     params.thumbnailUrl
@@ -119,14 +125,19 @@ export async function analyzeWithGeminiMultimodal(params: {
   let lastError: string | null = null;
 
   for (const model of CANDIDATE_MODELS) {
+    const remainingMs = deadlineAt - Date.now();
+    if (remainingMs < 1200) break;
+
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 9000);
+    const perModelTimeout = Math.min(4500, remainingMs);
+    const timer = setTimeout(() => controller.abort(), perModelTimeout);
+
     try {
       const generationConfig: Record<string, unknown> = {
         temperature: 0.1,
         responseMimeType: "application/json",
       };
-      if (model.startsWith("gemini-2.5")) {
+      if (model === "gemini-2.5-flash") {
         generationConfig.thinkingConfig = { thinkingBudget: 0 };
       }
 

@@ -620,13 +620,13 @@ export default function HomePage() {
                 <span>
                   판정:{" "}
                   {lastObservedEngine === "gemini-multimodal"
-                    ? "Gemini 멀티모달"
+                    ? "하이브리드 판정 엔진 (Gemini · 로컬)"
                     : lastObservedEngine === "local-fallback"
                     ? apiStatus.hasGeminiKey
                       ? "로컬 정밀 엔진 (Gemini 폴백)"
                       : "로컬 정밀 엔진"
                     : apiStatus.hasGeminiKey
-                    ? "Gemini 멀티모달"
+                    ? "하이브리드 판정 엔진 (Gemini · 로컬)"
                     : "로컬 정밀 엔진"}
                 </span>
                 <span>·</span>
